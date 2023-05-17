@@ -1,17 +1,76 @@
 import { Box, Button, Card, Modal, TextField } from '@mui/material';
 import React, { useState } from 'react';
 import { useKeyDown } from '../../../hooks/useKeyDown';
+import Cookies from 'js-cookie';
+import Axios from '../../AxiosInstance';
+import { AxiosError } from 'axios';
+import { useContext } from 'react';
+import GlobalContext from '../../context/GlobalContext';
+import { useEffect } from 'react';
 
 const CommentModal = ({ open = false, handleClose = () => {} }) => {
   const [textField, setTextField] = useState('');
   const [comments, setComments] = useState([]);
+  const [error, setError] = useState({});
+  const {user,setStatus} = useContext(GlobalContext);
 
   useKeyDown(() => {
     handleAddComment();
   }, ['Enter']);
 
-  const handleAddComment = () => {
+  useEffect(() => {
+    const userToken = Cookies.get('UserToken');
+    if (userToken !== undefined && userToken !== 'undefined') {
+      Axios.get('/comment', { headers: { Authorization: `Bearer ${userToken}` } }).then((res) => {
+        const commentsData = res.data.data.map((comment) => ({
+          id: comment.id,
+          msg: comment.text,
+        }));
+        setComments(commentsData);
+      });
+    }
+  }, []);
+
+  const validateForm = () => {
+    if (textField == '') {
+      setError('Please input text!');
+      return false;
+    }
+    setError('');
+    setTextField('');
+    return true;
+  };
+
+  const handleAddComment = async () => {
     // TODO implement logic
+    if (!validateForm()) return;
+    try {
+      const userToken = Cookies.get('UserToken');
+      const response = await Axios.post('/comment',createComment,{ text: textField }, {
+        headers: { Authorization: `Bearer ${userToken}` },
+      });
+
+      if (response.data.success) {
+        // TODO: show status of success here
+        setComments([...comments, { id: Math.random(), msg: textField }]);
+        resetAndClose();
+      }
+    }catch (error) {
+      if (error instanceof AxiosError && error.response) {
+        // TODO: show status of error from AxiosError here
+        setStatus({ severity: 'error', msg: error.response.data.error});
+      } else {
+        // TODO: show status of other errors here
+        setStatus({ severity: 'error', msg: error.message });
+      }
+    }
+  };
+  const resetAndClose = () => {
+    setTimeout(() => {
+      setComments('');
+      setError({});
+    }, 500);
+    handleClose();
   };
   return (
     <Modal open={open} onClose={handleClose}>
